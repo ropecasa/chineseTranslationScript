@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Live Chinese Stream Translator",
+  "version": "1.0",
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "activeTab"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
