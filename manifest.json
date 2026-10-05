@@ -1,11 +1,13 @@
 {
   "manifest_version": 3,
+  "author": "Rodrigo Pérez Casasnovas",
   "name": "Live Chinese Stream Translator",
-  "version": "1.0",
+  "version": "1.1",
   "permissions": [
     "tabCapture",
     "offscreen",
-    "activeTab"
+    "activeTab",
+    "scripting"
   ],
   "action": {
     "default_popup": "popup.html"

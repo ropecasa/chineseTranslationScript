@@ -8,69 +8,81 @@ chrome.runtime.onMessage.addListener(async (msg) => {
 });
 
 async function startCapture(streamId, apiKey) {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      mandatory: {
-        chromeMediaSource: 'tab',
-        chromeMediaSourceId: streamId
-      }
-    }
-  });
-
-  // Mantener reproducción en altavoces locales para que no se silencie el stream
-  audioContext = new AudioContext({ sampleRate: 16000 });
-  const source = audioContext.createMediaStreamSource(stream);
-  source.connect(audioContext.destination);
-
-  // Inicializar WebSocket con Gemini Live API
-  const host = "generativelanguage.googleapis.com";
-  const endpoint = `wss://${host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
-  webSocket = new WebSocket(endpoint);
-
-  webSocket.onopen = () => {
-    // 1. Handshake de configuración del modelo y formato de salida
-    const setupMessage = {
-      setup: {
-        model: "models/gemini-2.0-flash-exp",
-        generationConfig: {
-          responseModalities: ["TEXT"]
-        },
-        systemInstruction: {
-          parts: [{
-            text: "You are a real-time subtitle generator for Chinese live streams. " +
-                  "Listen to the Chinese speech and output chunks strictly formatted as: " +
-                  "HANZI: [characters] | PINYIN: [pinyin with tones] | EN: [English translation]. " +
-                  "Be concise, synchronized, and output nothing else."
-          }]
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        mandatory: {
+          chromeMediaSource: 'tab',
+          chromeMediaSourceId: streamId
         }
       }
+    });
+
+    audioContext = new AudioContext({ sampleRate: 16000 });
+    const source = audioContext.createMediaStreamSource(stream);
+
+    // Mantener salida a altavoces del usuario
+    source.connect(audioContext.destination);
+
+    const host = "generativelanguage.googleapis.com";
+    const endpoint = `wss://\({host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=\){apiKey}`;
+    webSocket = new WebSocket(endpoint);
+
+    webSocket.onopen = () => {
+      console.log("[Gemini WS] Conexión abierta con éxito");
+      const setupMessage = {
+        setup: {
+          model: "models/gemini-2.0-flash-exp",
+          generationConfig: {
+            responseModalities: ["TEXT"]
+          },
+          systemInstruction: {
+            parts: [{
+              text: "You are a real-time subtitle translator for Chinese live speech. " +
+                    "Continuously process incoming audio chunks. For every sentence or phrase spoken, " +
+                    "immediately return:\n" +
+                    "汉字: \n" +
+                    "Pinyin: \n" +
+                    "EN: \n" +
+                    "Do not add conversational commentary or preamble."
+            }]
+          }
+        }
+      };
+      webSocket.send(JSON.stringify(setupMessage));
+      setupAudioProcessing(source);
     };
-    webSocket.send(JSON.stringify(setupMessage));
 
-    // 2. Procesamiento y envío de audio PCM continuo
-    setupAudioProcessing(source);
-  };
+    webSocket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        const text = data.serverContent?.modelTurn?.parts?.[0]?.text;
+        if (text) {
+          chrome.runtime.sendMessage({ type: 'NEW_SUBTITLE', text: text });
+        }
+      } catch (err) {
+        console.error("[Gemini WS] Error parseando datos:", err);
+      }
+    };
 
-  webSocket.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    const textChunk = data.serverContent?.modelTurn?.parts?.[0]?.text;
-    if (textChunk) {
-      // Reenviar texto procesado para dibujarlo en la UI
-      chrome.runtime.sendMessage({ type: 'NEW_SUBTITLE', text: textChunk });
-    }
-  };
+    webSocket.onerror = (err) => console.error("[Gemini WS] Error:", err);
+    webSocket.onclose = (e) => console.warn("[Gemini WS] Cerrado con código:", e.code, e.reason);
+
+  } catch (err) {
+    console.error("[Capture Error]:", err);
+  }
 }
 
 function setupAudioProcessing(source) {
+  // Buffer de 4096 muestras a 16kHz (~256ms de audio por paquete)
   const processor = audioContext.createScriptProcessor(4096, 1, 1);
   source.connect(processor);
   processor.connect(audioContext.destination);
 
   processor.onaudioprocess = (e) => {
-    if (webSocket.readyState !== WebSocket.OPEN) return;
+    if (!webSocket || webSocket.readyState !== WebSocket.OPEN) return;
 
     const inputData = e.inputBuffer.getChannelData(0);
-    // Conversión de Float32 a Int16 (Linear PCM Little-Endian)
     const pcm16 = new Int16Array(inputData.length);
     for (let i = 0; i < inputData.length; i++) {
       const s = Math.max(-1, Math.min(1, inputData[i]));
@@ -82,14 +94,12 @@ function setupAudioProcessing(source) {
     for (let i = 0; i < uint8Bytes.byteLength; i++) {
       binary += String.fromCharCode(uint8Bytes[i]);
     }
-    const base64Audio = btoa(binary);
 
-    // Envío del chunk de audio en formato realtimeInput
     const audioPayload = {
       realtimeInput: {
         mediaChunks: [{
           mimeType: "audio/pcm;rate=16000",
-          data: base64Audio
+          data: btoa(binary)
         }]
       }
     };

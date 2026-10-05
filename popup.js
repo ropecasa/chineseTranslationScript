@@ -1,15 +1,13 @@
 document.getElementById('startBtn').addEventListener('click', () => {
-  const key = document.getElementById('apiKey').value.trim();
-  if (!key) return;
+  const keyInput = document.getElementById('apiKey');
+  const key = keyInput.value.trim();
 
-  chrome.runtime.sendMessage({ type: 'START_TRANSLATION', apiKey: key });
-  document.getElementById('subtitles').textContent = 'Conectado. Escuchando stream...\n';
-});
-
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === 'NEW_SUBTITLE') {
-    const box = document.getElementById('subtitles');
-    box.textContent += msg.text;
-    box.scrollTop = box.scrollHeight;
+  if (!key) {
+    keyInput.style.borderColor = '#ff4d4d';
+    return;
   }
+
+  // Se envía a background en memoria para inicializar el socket y se cierra la ventana
+  chrome.runtime.sendMessage({ type: 'START_TRANSLATION', apiKey: key });
+  window.close();
 });
