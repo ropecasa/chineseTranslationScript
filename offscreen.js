@@ -22,9 +22,9 @@ async function startCapture(streamId, apiKey) {
     const source = audioContext.createMediaStreamSource(stream);
     source.connect(audioContext.destination);
 
-    // Usar v1beta para la compatibilidad completa con Live API y WebSockets
+    //cambiamos a v1beta debido a que gemini 2.0 no tiene version en v1beta
     const host = "generativelanguage.googleapis.com";
-    const endpoint = `wss://${host}/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+    const endpoint = `wss://${host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
     webSocket = new WebSocket(endpoint);
 
     webSocket.onopen = () => {
