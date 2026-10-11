@@ -22,33 +22,25 @@ async function startCapture(streamId, apiKey) {
     const source = audioContext.createMediaStreamSource(stream);
     source.connect(audioContext.destination);
 
-    //cambiamos a v1beta debido a que gemini 2.0 no tiene version en v1beta
-    const host = "generativelanguage.googleapis.com";
-    const endpoint = `wss://${host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
-    webSocket = new WebSocket(endpoint);
+    const MODEL_NAME = "gemini-3.5-live-translate-preview";
+    const WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+
+    webSocket = new WebSocket(WS_URL);
 
     webSocket.onopen = () => {
-      console.log("[Gemini Live] Conectado");
+      console.log("[Gemini Live] WebSocket conectado con éxito");
 
-      // Handshake inicial: respuesta en texto, sin voz de agente y con formato estricto
       const setupMessage = {
         setup: {
-          model: "models/gemini-2.0-flash-exp",
+          model: `models/${MODEL_NAME}`,
           generationConfig: {
-            responseModalities: ["TEXT"],
-            temperature: 0.1,
-          },
-          systemInstruction: {
-            parts: [
-              {
-                text:
-                  "You are an automated real-time subtitle generator. " +
-                  "Continuously process the Chinese audio stream. Do NOT chat or answer. " +
-                  "For every spoken utterance, output strictly in this single-line format:\n" +
-                  "[ZH] <Chinese> | [PY] <Pinyin with tone marks> | [EN] <English Translation>\n" +
-                  "Output nothing else.",
-              },
-            ],
+            responseModalities: ["AUDIO"],
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
+            translationConfig: {
+              targetLanguageCode: "en",
+              echoTargetLanguage: true,
+            },
           },
         },
       };
@@ -59,10 +51,20 @@ async function startCapture(streamId, apiKey) {
 
     webSocket.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
-        const text = data.serverContent?.modelTurn?.parts?.[0]?.text;
-        if (text) {
-          chrome.runtime.sendMessage({ type: "NEW_SUBTITLE", text: text });
+        const response = JSON.parse(event.data);
+        if (response.serverContent) {
+          const content = response.serverContent;
+          
+          let zhText = content.inputTranscription?.text || "";
+          let enText = content.outputTranscription?.text || "";
+
+          if (zhText || enText) {
+            const formattedSubtitle = `[ZH]: ${zhText} \n[EN]: ${enText}`;
+            chrome.runtime.sendMessage({
+              type: "NEW_SUBTITLE",
+              text: formattedSubtitle,
+            });
+          }
         }
       } catch (err) {
         console.error("Error parseando respuesta:", err);
