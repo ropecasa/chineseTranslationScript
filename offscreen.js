@@ -47,9 +47,15 @@ async function startCapture(streamId, apiKey) {
       setupAudioProcessing(source);
     };
 
-    webSocket.onmessage = (event) => {
+    webSocket.onmessage = async (event) => {
       try {
-        const response = JSON.parse(event.data);
+        // Si la respuesta llega como Blob binario, lo convertimos a string
+        let rawData = event.data;
+        if (rawData instanceof Blob) {
+          rawData = await rawData.text();
+        }
+
+        const response = JSON.parse(rawData);
         if (response.serverContent) {
           const content = response.serverContent;
           
