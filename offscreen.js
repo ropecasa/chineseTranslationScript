@@ -35,8 +35,6 @@ async function startCapture(streamId, apiKey) {
           model: `models/${MODEL_NAME}`,
           generationConfig: {
             responseModalities: ["AUDIO"],
-            inputAudioTranscription: {},
-            outputAudioTranscription: {},
             translationConfig: {
               targetLanguageCode: "en",
               echoTargetLanguage: true,
@@ -96,6 +94,13 @@ function setupAudioProcessing(source) {
 
     const uint8Bytes = new Uint8Array(pcm16.buffer);
     let binary = "";
+
+
+
+
+
+
+    
     for (let i = 0; i < uint8Bytes.byteLength; i++) {
       binary += String.fromCharCode(uint8Bytes[i]);
     }
