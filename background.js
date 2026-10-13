@@ -70,6 +70,7 @@ function injectSubtitleOverlay() {
     text-shadow: 1px 1px 2px #000;
     max-height: 160px;
     overflow-y: auto;
+    white-space: pre-wrap;
   `;
   overlay.innerHTML = "[Gemini Live] Conectando con el stream...";
   document.body.appendChild(overlay);
@@ -79,6 +80,9 @@ function injectSubtitleOverlay() {
       const box = document.getElementById("gemini-live-subtitles");
       if (box) {
         box.textContent = msg.text;
+        //para cambiar el tipo de subtitulos, cambiar el texto anterior por este para hacerlo una lista en vez de subs que aparecen y se van.
+        // box.textContent += msg.text;
+        // box.scrollTop = box.scrollHeight;
       }
     }
   });

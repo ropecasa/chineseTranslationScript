@@ -34,11 +34,18 @@ async function startCapture(streamId, apiKey) {
         setup: {
           model: `models/${MODEL_NAME}`,
           generationConfig: {
-            responseModalities: ["AUDIO"],
+            responseModalities: ["TEXT"], //texto gasta menos recursos
             translationConfig: {
               targetLanguageCode: "en",
               echoTargetLanguage: true,
             },
+          },
+          systemInstruction: {
+            parts: [
+              {
+                text: "You are a phonetic transcriber for Chinese audio. For the audio you receive, output strictly the Pinyin with tone marks. Do not output anything else.",
+              },
+            ],
           },
         },
       };
@@ -58,12 +65,14 @@ async function startCapture(streamId, apiKey) {
         const response = JSON.parse(rawData);
         if (response.serverContent) {
           const content = response.serverContent;
-          
+
           let zhText = content.inputTranscription?.text || "";
           let enText = content.outputTranscription?.text || "";
+          //Pinyin (Generado por la instrucción de sistema en el turno del modelo)
+          let pinyinText = content.modelTurn?.parts?.[0]?.text || "";
 
-          if (zhText || enText) {
-            const formattedSubtitle = `[ZH]: ${zhText} \n[EN]: ${enText}`;
+          if (zhText || enText || pinyinText) {
+            const formattedSubtitle = `🇨🇳 ${zhText}\n🔤 ${pinyinText}\n🇬🇧 ${enText}\n\n`;
             chrome.runtime.sendMessage({
               type: "NEW_SUBTITLE",
               text: formattedSubtitle,
@@ -100,13 +109,6 @@ function setupAudioProcessing(source) {
 
     const uint8Bytes = new Uint8Array(pcm16.buffer);
     let binary = "";
-
-
-
-
-
-
-    
     for (let i = 0; i < uint8Bytes.byteLength; i++) {
       binary += String.fromCharCode(uint8Bytes[i]);
     }
