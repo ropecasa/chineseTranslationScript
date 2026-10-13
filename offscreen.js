@@ -23,7 +23,7 @@ async function startCapture(streamId, apiKey) {
     source.connect(audioContext.destination);
 
     const MODEL_NAME = "gemini-2.0-flash";
-    const WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+    const WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
 
     webSocket = new WebSocket(WS_URL);
 
