@@ -22,7 +22,7 @@ async function startCapture(streamId, apiKey) {
     const source = audioContext.createMediaStreamSource(stream);
     source.connect(audioContext.destination);
 
-    const MODEL_NAME = "gemini-3.5-live-translate-preview";
+    const MODEL_NAME = "gemini-2.0-flash";
     const WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
 
     webSocket = new WebSocket(WS_URL);
@@ -34,11 +34,20 @@ async function startCapture(streamId, apiKey) {
         setup: {
           model: `models/${MODEL_NAME}`,
           generationConfig: {
-            responseModalities: ["AUDIO"],
-            translationConfig: {
-              targetLanguageCode: "en",
-              echoTargetLanguage: true,
-            },
+            responseModalities: ["TEXT"],
+          },
+          systemInstruction: {
+            parts: [
+              {
+                text:
+                  "You are a real-time Chinese subtitle translator. " +
+                  "For every spoken sentence, output exactly 3 lines:\n" +
+                  "🇨🇳 [Hanzi characters]\n" +
+                  "🔤 [Pinyin with tone marks]\n" +
+                  "🇬🇧 [English translation]\n" +
+                  "Do not add any other text. Output only when the sentence is complete.",
+              },
+            ],
           },
         },
       };
@@ -58,15 +67,23 @@ async function startCapture(streamId, apiKey) {
         const response = JSON.parse(rawData);
         if (response.serverContent) {
           const content = response.serverContent;
-          
-          let zhText = content.inputTranscription?.text || "";
-          let enText = content.outputTranscription?.text || "";
+          if (!content) return;
 
-          if (zhText || enText) {
-            const formattedSubtitle = `[ZH]: ${zhText} \n[EN]: ${enText}`;
+          const textChunk = content.modelTurn?.parts?.[0]?.text;
+          const isTurnComplete = content.turnComplete;
+
+          if (textChunk) {
             chrome.runtime.sendMessage({
               type: "NEW_SUBTITLE",
-              text: formattedSubtitle,
+              text: textChunk,
+            });
+          }
+
+          // Añadir una separación clara entre cada frase detectada
+          if (isTurnComplete) {
+            chrome.runtime.sendMessage({
+              type: "NEW_SUBTITLE",
+              text: "\n\n---\n\n",
             });
           }
         }
@@ -100,13 +117,6 @@ function setupAudioProcessing(source) {
 
     const uint8Bytes = new Uint8Array(pcm16.buffer);
     let binary = "";
-
-
-
-
-
-
-    
     for (let i = 0; i < uint8Bytes.byteLength; i++) {
       binary += String.fromCharCode(uint8Bytes[i]);
     }

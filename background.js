@@ -58,18 +58,18 @@ function injectSubtitleOverlay() {
     max-width: 850px;
     background: rgba(0, 0, 0, 0.85);
     color: #fff;
-    padding: 14px 20px;
+    padding: 16px 24px;
     border-radius: 10px;
     font-family: sans-serif;
-    font-size: 17px;
+    font-size: 20px;
     line-height: 1.5;
     z-index: 2147483647;
     pointer-events: auto;
     box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-    border: 1px solid rgba(255,255,255,0.2);
-    text-shadow: 1px 1px 2px #000;
-    max-height: 160px;
+    max-height: 200px;
     overflow-y: auto;
+    white-space: pre-wrap;
+    text-align: center;
   `;
   overlay.innerHTML = "[Gemini Live] Conectando con el stream...";
   document.body.appendChild(overlay);
@@ -78,7 +78,8 @@ function injectSubtitleOverlay() {
     if (msg.type === "RENDER_SUBTITLE") {
       const box = document.getElementById("gemini-live-subtitles");
       if (box) {
-        box.textContent = msg.text;
+        box.textContent += msg.text;
+        box.scrollTop = box.scrollHeight;
       }
     }
   });
