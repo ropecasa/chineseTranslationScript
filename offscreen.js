@@ -22,8 +22,8 @@ async function startCapture(streamId, apiKey) {
     const source = audioContext.createMediaStreamSource(stream);
     source.connect(audioContext.destination);
 
-    const MODEL_NAME = "gemini-3.5-live-translate-preview";
-    const WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+    const MODEL_NAME = "gemini-2.0-flash-exp";
+    const WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
 
     webSocket = new WebSocket(WS_URL);
 
@@ -66,16 +66,21 @@ async function startCapture(streamId, apiKey) {
         if (response.serverContent) {
           const content = response.serverContent;
 
-          let zhText = content.inputTranscription?.text || "";
-          let enText = content.outputTranscription?.text || "";
-          //Pinyin (Generado por la instrucción de sistema en el turno del modelo)
-          let pinyinText = content.modelTurn?.parts?.[0]?.text || "";
+          // Extraemos los fragmentos de texto generados en vivo
+          const textChunk = content.modelTurn?.parts?.[0]?.text;
+          const isTurnComplete = content.turnComplete;
 
-          if (zhText || enText || pinyinText) {
-            const formattedSubtitle = `🇨🇳 ${zhText}\n🔤 ${pinyinText}\n🇬🇧 ${enText}\n\n`;
+          if (textChunk) {
             chrome.runtime.sendMessage({
               type: "NEW_SUBTITLE",
-              text: formattedSubtitle,
+              text: textChunk,
+            });
+          }
+          // Al terminar la frase, metemos un separador visual
+          if (isTurnComplete) {
+            chrome.runtime.sendMessage({
+              type: "NEW_SUBTITLE",
+              text: "\n\n---\n\n",
             });
           }
         }
