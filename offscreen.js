@@ -1,5 +1,7 @@
 let webSocket = null;
 let audioContext = null;
+let currentZh = "";
+let currentEn = "";
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "INIT_CAPTURE") {
@@ -22,8 +24,8 @@ async function startCapture(streamId, apiKey) {
     const source = audioContext.createMediaStreamSource(stream);
     source.connect(audioContext.destination);
 
-    const MODEL_NAME = "gemini-2.0-flash";
-    const WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+    const MODEL_NAME = "gemini-3.5-live-translate-preview";
+    const WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
     webSocket = new WebSocket(WS_URL);
 
     webSocket.onopen = () => {
@@ -33,18 +35,11 @@ async function startCapture(streamId, apiKey) {
         setup: {
           model: `models/${MODEL_NAME}`,
           generationConfig: {
-            responseModalities: ["TEXT"], //texto gasta menos recursos
+            responseModalities: ["AUDIO"], //texto gasta menos recursos
             translationConfig: {
               targetLanguageCode: "en",
               echoTargetLanguage: true,
             },
-          },
-          systemInstruction: {
-            parts: [
-              {
-                text: "You are a phonetic transcriber for Chinese audio. For the audio you receive, output strictly the Pinyin with tone marks. Do not output anything else.",
-              },
-            ],
           },
         },
       };
@@ -62,26 +57,40 @@ async function startCapture(streamId, apiKey) {
         }
 
         const response = JSON.parse(rawData);
-        if (response.serverContent) {
-          const content = response.serverContent;
+        const content = response.serverContent;
+        if (!content) return;
 
-          // Extraemos los fragmentos de texto generados en vivo
-          const textChunk = content.modelTurn?.parts?.[0]?.text;
-          const isTurnComplete = content.turnComplete;
+        let updated = false;
 
-          if (textChunk) {
-            chrome.runtime.sendMessage({
-              type: "NEW_SUBTITLE",
-              text: textChunk,
-            });
-          }
-          // Al terminar la frase, metemos un separador visual
-          if (isTurnComplete) {
-            chrome.runtime.sendMessage({
-              type: "NEW_SUBTITLE",
-              text: "\n\n---\n\n",
-            });
-          }
+        // Acumular Hanzi conforme llegan las sílabas
+        if (content.inputTranscription?.text) {
+          currentZh += content.inputTranscription.text;
+          updated = true;
+        }
+
+        // Acumular Inglés conforme llegan las palabras
+        if (content.outputTranscription?.text) {
+          currentEn += content.outputTranscription.text;
+          updated = true;
+        }
+
+        if (updated) {
+          // Generar el Pinyin instantáneamente a partir del Hanzi acumulado
+          const currentPy = window.pinyinPro
+            ? window.pinyinPro.pinyin(currentZh)
+            : "";
+
+          const formattedSubtitle = `🇨🇳 ${currentZh}\n🔤 ${currentPy}\n🇬🇧 ${currentEn}`;
+          chrome.runtime.sendMessage({
+            type: "NEW_SUBTITLE",
+            text: formattedSubtitle,
+          });
+        }
+
+        // Si termina la frase o se acumula demasiado texto, reiniciamos para la siguiente línea
+        if (content.turnComplete || currentZh.length > 45) {
+          currentZh = "";
+          currentEn = "";
         }
       } catch (err) {
         console.error("Error parseando respuesta:", err);

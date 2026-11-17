@@ -80,7 +80,7 @@ function injectSubtitleOverlay() {
       const box = document.getElementById("gemini-live-subtitles");
       if (box) {
         //para cambiar el tipo de subtitulos, cambiar el texto anterior por este para hacerlo una lista en vez de subs que aparecen y se van.
-        box.textContent += msg.text;
+        box.textContent = msg.text;
         box.scrollTop = box.scrollHeight;
       }
     }
