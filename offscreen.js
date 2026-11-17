@@ -1,5 +1,7 @@
 let webSocket = null;
 let audioContext = null;
+let currentZh = "";
+let currentEn = "";
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "INIT_CAPTURE") {
@@ -24,7 +26,6 @@ async function startCapture(streamId, apiKey) {
 
     const MODEL_NAME = "gemini-3.5-live-translate-preview";
     const WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
-
     webSocket = new WebSocket(WS_URL);
 
     webSocket.onopen = () => {
@@ -34,7 +35,7 @@ async function startCapture(streamId, apiKey) {
         setup: {
           model: `models/${MODEL_NAME}`,
           generationConfig: {
-            responseModalities: ["AUDIO"],
+            responseModalities: ["AUDIO"], //texto gasta menos recursos
             translationConfig: {
               targetLanguageCode: "en",
               echoTargetLanguage: true,
@@ -56,19 +57,40 @@ async function startCapture(streamId, apiKey) {
         }
 
         const response = JSON.parse(rawData);
-        if (response.serverContent) {
-          const content = response.serverContent;
-          
-          let zhText = content.inputTranscription?.text || "";
-          let enText = content.outputTranscription?.text || "";
+        const content = response.serverContent;
+        if (!content) return;
 
-          if (zhText || enText) {
-            const formattedSubtitle = `[ZH]: ${zhText} \n[EN]: ${enText}`;
-            chrome.runtime.sendMessage({
-              type: "NEW_SUBTITLE",
-              text: formattedSubtitle,
-            });
-          }
+        let updated = false;
+
+        // Acumular Hanzi conforme llegan las sílabas
+        if (content.inputTranscription?.text) {
+          currentZh += content.inputTranscription.text;
+          updated = true;
+        }
+
+        // Acumular Inglés conforme llegan las palabras
+        if (content.outputTranscription?.text) {
+          currentEn += content.outputTranscription.text;
+          updated = true;
+        }
+
+        if (updated) {
+          // Generar el Pinyin instantáneamente a partir del Hanzi acumulado
+          const currentPy = window.pinyinPro
+            ? window.pinyinPro.pinyin(currentZh)
+            : "";
+
+          const formattedSubtitle = `🇨🇳 ${currentZh}\n🔤 ${currentPy}\n🇬🇧 ${currentEn}`;
+          chrome.runtime.sendMessage({
+            type: "NEW_SUBTITLE",
+            text: formattedSubtitle,
+          });
+        }
+
+        // Si termina la frase o se acumula demasiado texto, reiniciamos para la siguiente línea
+        if (content.turnComplete || currentZh.length > 45) {
+          currentZh = "";
+          currentEn = "";
         }
       } catch (err) {
         console.error("Error parseando respuesta:", err);
@@ -100,13 +122,6 @@ function setupAudioProcessing(source) {
 
     const uint8Bytes = new Uint8Array(pcm16.buffer);
     let binary = "";
-
-
-
-
-
-
-    
     for (let i = 0; i < uint8Bytes.byteLength; i++) {
       binary += String.fromCharCode(uint8Bytes[i]);
     }
